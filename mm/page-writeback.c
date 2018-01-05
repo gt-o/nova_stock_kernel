@@ -38,7 +38,6 @@
 #include <linux/sched/rt.h>
 #include <linux/mm_inline.h>
 #include <trace/events/writeback.h>
-#include <../block/blk-cgroup.h>
 
 #include "internal.h"
 
@@ -1016,6 +1015,11 @@ static void bdi_update_dirty_ratelimit(struct backing_dev_info *bdi,
 	 */
 	balanced_dirty_ratelimit = div_u64((u64)task_ratelimit * write_bw,
 					   dirty_rate | 1);
+	/*
+	 * balanced_dirty_ratelimit ~= (write_bw / N) <= write_bw
+	 */
+	if (unlikely(balanced_dirty_ratelimit > write_bw))
+		balanced_dirty_ratelimit = write_bw;
 
 	/*
 	 * We could safely do this and return immediately:
@@ -1351,7 +1355,6 @@ static void balance_dirty_pages(struct address_space *mapping,
 	unsigned long dirty_ratelimit;
 	unsigned long pos_ratio;
 	struct backing_dev_info *bdi = mapping->backing_dev_info;
-	struct bdi_writeback *wb = &bdi->wb;
 	bool strictlimit = bdi->capabilities & BDI_CAP_STRICTLIMIT;
 	unsigned long start_time = jiffies;
 
@@ -1362,21 +1365,7 @@ static void balance_dirty_pages(struct address_space *mapping,
 		unsigned long uninitialized_var(bdi_dirty);
 		unsigned long dirty;
 		unsigned long bg_thresh;
-#ifdef CONFIG_BLK_DEV_THROTTLING
-		struct blkcg_gq *blkg;
-		unsigned int weight;
 
-		/*lint -save -e730*/
-		if (unlikely(!mapping->host || !mapping->host->i_sb ||
-			     !mapping->host->i_sb->s_bdev))
-		/*lint -restore*/
-			blkg = NULL;
-		else
-			blkg = task_blkg_get(current,
-					     mapping->host->i_sb->s_bdev);
-
-		task_blkg_inc_writer(blkg);
-#endif
 		/*
 		 * Unstable writes are a feature of certain networked
 		 * filesystems (i.e. NFS) in which data may have been
@@ -1415,10 +1404,6 @@ static void balance_dirty_pages(struct address_space *mapping,
 			current->nr_dirtied = 0;
 			current->nr_dirtied_pause =
 				dirty_poll_interval(dirty, thresh);
-#ifdef CONFIG_BLK_DEV_THROTTLING
-			task_blkg_dec_writer(blkg);
-			task_blkg_put(blkg);
-#endif
 			break;
 		}
 
@@ -1444,14 +1429,6 @@ static void balance_dirty_pages(struct address_space *mapping,
 					       bdi_thresh, bdi_dirty);
 		task_ratelimit = ((u64)dirty_ratelimit * pos_ratio) >>
 							RATELIMIT_CALC_SHIFT;
-
-#ifdef CONFIG_BLK_DEV_THROTTLING
-		weight = blkcg_weight(blkg);
-		if (weight != BLKIO_WEIGHT_DEFAULT)
-			task_ratelimit = (u64)task_ratelimit * weight /
-					BLKIO_WEIGHT_DEFAULT;
-#endif
-
 		max_pause = bdi_max_pause(bdi, bdi_dirty);
 		min_pause = bdi_min_pause(bdi, max_pause,
 					  task_ratelimit, dirty_ratelimit,
@@ -1494,10 +1471,6 @@ static void balance_dirty_pages(struct address_space *mapping,
 				current->nr_dirtied = 0;
 			} else if (current->nr_dirtied_pause <= pages_dirtied)
 				current->nr_dirtied_pause += pages_dirtied;
-#ifdef CONFIG_BLK_DEV_THROTTLING
-			task_blkg_dec_writer(blkg);
-			task_blkg_put(blkg);
-#endif
 			break;
 		}
 		if (unlikely(pause > max_pause)) {
@@ -1520,18 +1493,12 @@ pause:
 					  pause,
 					  start_time);
 		__set_current_state(TASK_KILLABLE);
-		atomic_inc(&wb->dirty_sleeping);
 		io_schedule_timeout(pause);
-		atomic_dec(&wb->dirty_sleeping);
 
 		current->dirty_paused_when = now + pause;
 		current->nr_dirtied = 0;
 		current->nr_dirtied_pause = nr_dirtied_pause;
 
-#ifdef CONFIG_BLK_DEV_THROTTLING
-		task_blkg_dec_writer(blkg);
-		task_blkg_put(blkg);
-#endif
 		/*
 		 * This is typically equal to (nr_dirty < dirty_thresh) and can
 		 * also keep "1000+ dd on a slow USB stick" under control.
@@ -2136,22 +2103,6 @@ void account_page_dirtied(struct page *page, struct address_space *mapping)
 	trace_writeback_dirty_page(page, mapping);
 
 	if (mapping_cap_account_dirty(mapping)) {
-#ifdef CONFIG_BLK_DEV_THROTTLING
-		struct blkcg_gq *blkg;
-
-		if (!mapping->host || !mapping->host->i_sb ||
-		    !mapping->host->i_sb->s_bdev)
-			goto skip;
-
-		rcu_read_lock();
-		blkg = task_blkcg_gq(current, mapping->host->i_sb->s_bdev);
-		if (blkg)
-			/*lint -save -e732 -e737 -e747*/
-			__percpu_counter_add(&blkg->nr_dirtied, 1, BDI_STAT_BATCH);
-			/*lint -restore*/
-		rcu_read_unlock();
-skip:
-#endif
 		__inc_zone_page_state(page, NR_FILE_DIRTY);
 		__inc_zone_page_state(page, NR_DIRTIED);
 		__inc_bdi_stat(mapping->backing_dev_info, BDI_RECLAIMABLE);

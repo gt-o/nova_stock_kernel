@@ -75,6 +75,7 @@
 #include <linux/uprobes.h>
 #include <linux/aio.h>
 #include <linux/compiler.h>
+
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/uaccess.h>
@@ -89,8 +90,6 @@
 #ifdef CONFIG_HW_CGROUP_PIDS
 #include <./cgroup_huawei/cgroup_pids.h>
 #endif
-
-#include <../block/blk-cgroup.h>
 
 /*
  * Protected counters by write_lock_irq(&tasklist_lock)
@@ -606,24 +605,12 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p)
 	if (mm_alloc_pgd(mm))
 		goto fail_nopgd;
 
-#ifdef CONFIG_BLK_DEV_THROTTLING
-	mm->io_limit = kmalloc(sizeof(struct blk_throtl_io_limit), GFP_KERNEL);
-	if (!mm->io_limit)
-		goto fail_nocontext;
-
-	blk_throtl_io_limit_init(mm->io_limit);
-#endif
-
 	if (init_new_context(p, mm))
-		goto fail_io_limit;
+		goto fail_nocontext;
 
 	return mm;
 
-fail_io_limit:
-#ifdef CONFIG_BLK_DEV_THROTTLING
-	kfree(mm->io_limit);
 fail_nocontext:
-#endif
 	mm_free_pgd(mm);
 fail_nopgd:
 	free_mm(mm);
@@ -673,9 +660,6 @@ void __mmdrop(struct mm_struct *mm)
 	destroy_context(mm);
 	mmu_notifier_mm_destroy(mm);
 	check_mm(mm);
-#ifdef CONFIG_BLK_DEV_THROTTLING
-	blk_throtl_io_limit_put(mm->io_limit);
-#endif
 	free_mm(mm);
 }
 EXPORT_SYMBOL_GPL(__mmdrop);
@@ -775,8 +759,7 @@ struct mm_struct *mm_access(struct task_struct *task, unsigned int mode)
 
 	mm = get_task_mm(task);
 	if (mm && mm != current->mm &&
-			!ptrace_may_access(task, mode) &&
-			!capable(CAP_SYS_RESOURCE)) {
+			!ptrace_may_access(task, mode)) {
 		mmput(mm);
 		mm = ERR_PTR(-EACCES);
 	}
