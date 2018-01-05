@@ -32,7 +32,7 @@
 #include <linux/delay.h>
 #include <linux/ratelimit.h>
 #include <linux/pm_runtime.h>
-#include <linux/wbt.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/block.h>
 
@@ -745,8 +745,6 @@ blk_init_allocated_queue(struct request_queue *q, request_fn_proc *rfn,
 
 fail:
 	blk_free_flush_queue(q->fq);
-	wbt_exit(q->rq_wb);
-	q->rq_wb = NULL;
 	return NULL;
 }
 EXPORT_SYMBOL(blk_init_allocated_queue);
@@ -947,7 +945,6 @@ static struct request *__get_request(struct request_list *rl, int rw_flags,
 	struct io_cq *icq = NULL;
 	const bool is_sync = rw_is_sync(rw_flags) != 0;
 	int may_queue;
-	u64 cmd_flags = (u64)(unsigned int)rw_flags;
 
 	if (unlikely(blk_queue_dying(q)))
 		return ERR_PTR(-ENODEV);
@@ -1001,7 +998,7 @@ static struct request *__get_request(struct request_list *rl, int rw_flags,
 
 	/*
 	 * Decide whether the new request will be managed by elevator.  If
-	 * so, mark @cmd_flags and increment elvpriv.  Non-zero elvpriv will
+	 * so, mark @rw_flags and increment elvpriv.  Non-zero elvpriv will
 	 * prevent the current elevator from being destroyed until the new
 	 * request is freed.  This guarantees icq's won't be destroyed and
 	 * makes creating new ones safe.
@@ -1010,14 +1007,14 @@ static struct request *__get_request(struct request_list *rl, int rw_flags,
 	 * it will be created after releasing queue_lock.
 	 */
 	if (blk_rq_should_init_elevator(bio) && !blk_queue_bypass(q)) {
-		cmd_flags |= REQ_ELVPRIV;
+		rw_flags |= REQ_ELVPRIV;
 		q->nr_rqs_elvpriv++;
 		if (et->icq_cache && ioc)
 			icq = ioc_lookup_icq(ioc, q);
 	}
 
 	if (blk_queue_io_stat(q))
-		cmd_flags |= REQ_IO_STAT;
+		rw_flags |= REQ_IO_STAT;
 	spin_unlock_irq(q->queue_lock);
 
 	/* allocate and init request */
@@ -1027,10 +1024,10 @@ static struct request *__get_request(struct request_list *rl, int rw_flags,
 
 	blk_rq_init(q, rq);
 	blk_rq_set_rl(rq, rl);
-	rq->cmd_flags = cmd_flags | REQ_ALLOCED;
+	rq->cmd_flags = rw_flags | REQ_ALLOCED;
 
 	/* init elvpriv */
-	if (cmd_flags & REQ_ELVPRIV) {
+	if (rw_flags & REQ_ELVPRIV) {
 		if (unlikely(et->icq_cache && !icq)) {
 			if (ioc)
 				icq = ioc_create_icq(ioc, q, gfp_mask);
@@ -1274,7 +1271,7 @@ void blk_requeue_request(struct request_queue *q, struct request *rq)
 		blk_queue_end_tag(q, rq);
 
 	BUG_ON(blk_queued_rq(rq));
-	wbt_requeue(q->rq_wb, &rq->wb_stat);
+
 	elv_requeue_request(q, rq);
 }
 EXPORT_SYMBOL(blk_requeue_request);
@@ -1360,8 +1357,6 @@ void __blk_put_request(struct request_queue *q, struct request *req)
 
 	/* this is a bio leak if the bio is not tagged with BIO_DONTFREE */
 	WARN_ON(req->bio && !bio_flagged(req->bio, BIO_DONTFREE));
-
-	wbt_done(q->rq_wb, &req->wb_stat, (bool)(req->cmd_flags & REQ_FG));
 
 	/*
 	 * Request may not have originated from ll_rw_blk. if not,
@@ -1557,7 +1552,6 @@ void blk_queue_bio(struct request_queue *q, struct bio *bio)
 	int el_ret, rw_flags, where = ELEVATOR_INSERT_SORT;
 	struct request *req;
 	unsigned int request_count = 0;
-	bool wb_acct;
 
 	/*
 	 * low level driver can indicate that it wants pages above a
@@ -1606,10 +1600,6 @@ void blk_queue_bio(struct request_queue *q, struct bio *bio)
 	}
 
 get_rq:
-	/*lint -save -e712 -e747*/
-	wb_acct = wbt_wait(q->rq_wb, bio->bi_rw, q->queue_lock);
-	/*lint -restore*/
-
 	/*
 	 * This sync check and mask will be re-done in init_request_from_bio(),
 	 * but we need to set it earlier to expose the sync flag to the
@@ -1625,14 +1615,9 @@ get_rq:
 	 */
 	req = get_request(q, rw_flags, bio, GFP_NOIO);
 	if (IS_ERR(req)) {
-		if (wb_acct)
-			__wbt_done(q->rq_wb);
 		bio_endio(bio, PTR_ERR(req));	/* @q is dead */
 		goto out_unlock;
 	}
-
-	if (wb_acct)
-		wbt_mark_tracked(&req->wb_stat);
 
 	/*
 	 * After dropping the lock and possibly sleeping here, our request
@@ -1693,10 +1678,6 @@ static inline void blk_partition_remap(struct bio *bio)
 static void handle_bad_sector(struct bio *bio)
 {
 	char b[BDEVNAME_SIZE];
-	char devname[BDEVNAME_SIZE];
-
-	memset(devname, 0x00, BDEVNAME_SIZE);
-	bdevname(bio->bi_bdev, devname);
 
 	printk(KERN_INFO "attempt to access beyond end of device\n");
 	printk(KERN_INFO "%s: rw=%ld, want=%Lu, limit=%Lu\n",
@@ -1704,9 +1685,7 @@ static void handle_bad_sector(struct bio *bio)
 			bio->bi_rw,
 			(unsigned long long)bio_end_sector(bio),
 			(long long)(i_size_read(bio->bi_bdev->bd_inode) >> 9));
-	if(NULL != strstr(devname,"mmcblk1p1")) {
-		panic("attempt to access beyond end of mmc1\n");
-	}
+
 	set_bit(BIO_EOF, &bio->bi_flags);
 }
 
@@ -1774,69 +1753,6 @@ static inline int bio_check_eod(struct bio *bio, unsigned int nr_sectors)
 	return 0;
 }
 
-#define UPDATE_TIME (HZ / 2)
-static void blk_update_perf(struct request_queue *q,
-	struct hd_struct *p)
-{
-	unsigned long now = jiffies;
-	unsigned long last = q->bw_timestamp;
-	sector_t read_sect, write_sect, tmp_sect;
-	unsigned long read_ios, write_ios, tmp_ios;
-	unsigned long current_ticks;
-	unsigned long busy_ticks;
-
-	/*lint -save -e550 -e774*/
-	if (time_before(now, last + UPDATE_TIME))
-		return;
-	/*lint -restore*/
-
-	/*lint -save -e50 -e747 -e774 -e1072*/
-	if (cmpxchg(&q->bw_timestamp, last, now) != last)
-		return;
-	/*lint -restore*/
-
-	/*lint -save -e40 -e409 -e530 -e570 -e574 -e713 -e737 -e1058 -e1514*/
-	tmp_sect = part_stat_read(p, sectors[READ]);
-	read_sect = tmp_sect - q->last_sects[READ];
-	q->last_sects[READ] = tmp_sect;
-	tmp_sect = part_stat_read(p, sectors[WRITE]);
-	write_sect = tmp_sect - q->last_sects[WRITE];
-	q->last_sects[WRITE] = tmp_sect;
-
-	tmp_ios = part_stat_read(p, ios[READ]);
-	read_ios = tmp_ios - q->last_ios[READ];
-	q->last_ios[READ] = tmp_ios;
-	tmp_ios = part_stat_read(p, ios[WRITE]);
-	write_ios = tmp_ios - q->last_ios[WRITE];
-	q->last_ios[WRITE] = tmp_ios;
-
-	current_ticks = part_stat_read(p, io_ticks);
-	busy_ticks = current_ticks - q->last_ticks;
-	q->last_ticks = current_ticks;
-	/*lint -restore*/
-
-	/* Don't account for long idle */
-	if (now - last > UPDATE_TIME * 2)
-		return;
-	/* Disk load is too low or driver doesn't account io_ticks */
-	if (busy_ticks == 0)
-		return;
-
-	if (busy_ticks > now - last)
-		busy_ticks = now - last;
-
-	/*lint -save -e712 -e713*/
-	tmp_sect = (read_sect + write_sect) * HZ;
-	sector_div(tmp_sect, busy_ticks);
-	q->disk_bw = tmp_sect;
-	/*lint -restore*/
-
-	tmp_ios = (read_ios + write_ios) * HZ / busy_ticks;
-	q->disk_iops = tmp_ios;
-/*lint -save -e550*/
-}
-/*lint -restore*/
-
 static noinline_for_stack bool
 generic_make_request_checks(struct bio *bio)
 {
@@ -1890,8 +1806,7 @@ generic_make_request_checks(struct bio *bio)
 	 * drivers without flush support don't have to worry
 	 * about them.
 	 */
-	if ((bio->bi_rw & (REQ_FLUSH | REQ_FUA)) &&
-	    !test_bit(QUEUE_FLAG_WC, &q->queue_flags)) {
+	if ((bio->bi_rw & (REQ_FLUSH | REQ_FUA)) && !q->flush_flags) {
 		bio->bi_rw &= ~(REQ_FLUSH | REQ_FUA);
 		if (!nr_sectors) {
 			err = 0;
@@ -1918,9 +1833,6 @@ generic_make_request_checks(struct bio *bio)
 	 * layer knows how to live with it.
 	 */
 	create_io_context(GFP_ATOMIC, q->node);
-
-	blk_update_perf(q,
-		part->partno ? &part_to_disk(part)->part0 : part);
 
 	if (blk_throtl_bio(q, bio))
 		return false;	/* throttled, will be resubmitted later */
@@ -2135,7 +2047,6 @@ int blk_insert_cloned_request(struct request_queue *q, struct request *rq)
 {
 	unsigned long flags;
 	int where = ELEVATOR_INSERT_BACK;
-	bool wb_acct;
 
 	if (blk_rq_check_limits(q, rq))
 		return -EIO;
@@ -2155,13 +2066,6 @@ int blk_insert_cloned_request(struct request_queue *q, struct request *rq)
 	 * because it will be linked to another request_queue
 	 */
 	BUG_ON(blk_queued_rq(rq));
-
-	if (rq->bio)
-	{
-		wb_acct = wbt_wait(q->rq_wb, rq->bio->bi_rw, q->queue_lock);
-		if (wb_acct)
-			wbt_mark_tracked(&rq->wb_stat);
-	}
 
 	if (rq->cmd_flags & (REQ_FLUSH|REQ_FUA))
 		where = ELEVATOR_INSERT_FLUSH;
@@ -2460,8 +2364,6 @@ void blk_start_request(struct request *req)
 {
 	blk_dequeue_request(req);
 
-	wbt_issue(req->q->rq_wb, &req->wb_stat, (bool)(req->cmd_flags & REQ_FG));
-
 	/*
 	 * We are now handing the request to the hardware, initialize
 	 * resid_len to full count and add the timeout handler.
@@ -2528,13 +2430,6 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 	int total_bytes;
 
 	trace_block_rq_complete(req->q, req, nr_bytes);
-#ifdef CONFIG_WBT
-	/*lint -save -e514*/
-	blk_stat_add(&req->q->rq_stats[rq_data_dir(req)], req);
-	if (req->cmd_flags & REQ_FG)
-		blk_stat_add(&req->q->rq_stats[2 + rq_data_dir(req)], req);
-	/*lint -restore*/
-#endif
 
 	if (!req->bio)
 		return false;
@@ -2712,10 +2607,9 @@ void blk_finish_request(struct request *req, int error)
 
 	blk_account_io_done(req);
 
-	if (req->end_io) {
-		wbt_done(req->q->rq_wb, &req->wb_stat, (bool)(req->cmd_flags & REQ_FG));
+	if (req->end_io)
 		req->end_io(req, error);
-	} else {
+	else {
 		if (blk_bidi_rq(req))
 			__blk_put_request(req->next_rq->q, req->next_rq);
 

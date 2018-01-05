@@ -16,7 +16,6 @@ struct io_context;
 struct cgroup_subsys_state;
 typedef void (bio_end_io_t) (struct bio *, int);
 typedef void (bio_destructor_t) (struct bio *);
-typedef void (bio_throtl_end_io_t) (struct bio *);
 
 /*
  * was unsigned short, but we might as well be ready for > 64kB I/O pages
@@ -71,13 +70,6 @@ struct bio {
 	bio_end_io_t		*bi_end_io;
 
 	void			*bi_private;
-
-#ifdef CONFIG_BLK_DEV_THROTTLING
-	bio_throtl_end_io_t	*bi_throtl_end_io1;
-	void			*bi_throtl_private1;
-	bio_throtl_end_io_t	*bi_throtl_end_io2;
-	void			*bi_throtl_private2;
-#endif
 #ifdef CONFIG_BLK_CGROUP
 	/*
 	 * Optional ioc and css associated with this bio.  Put on bio
@@ -196,8 +188,7 @@ enum rq_flag_bits {
 	__REQ_FLUSH,		/* request for cache flush */
 	__REQ_POST_FLUSH_BARRIER,/* cache barrier after a data req */
 	__REQ_BARRIER,		/* marks flush req as barrier */
-	__REQ_BG,		/* background activity */
-	__REQ_FG,		/* foreground activity */
+
 	/* bio only flags */
 	__REQ_RAHEAD,		/* read ahead, can fail anytime */
 	__REQ_THROTTLED,	/* This bio has already been subjected to
@@ -246,7 +237,7 @@ enum rq_flag_bits {
 #define REQ_COMMON_MASK \
 	(REQ_WRITE | REQ_FAILFAST_MASK | REQ_SYNC | REQ_META | REQ_PRIO | \
 	 REQ_DISCARD | REQ_WRITE_SAME | REQ_NOIDLE | REQ_FLUSH | REQ_FUA | \
-	 REQ_SECURE | REQ_INTEGRITY | REQ_BARRIER | REQ_BG | REQ_FG)
+	 REQ_SECURE | REQ_INTEGRITY | REQ_BARRIER)
 #define REQ_CLONE_MASK		REQ_COMMON_MASK
 
 #define BIO_NO_ADVANCE_ITER_MASK	(REQ_DISCARD|REQ_WRITE_SAME)
@@ -275,21 +266,11 @@ enum rq_flag_bits {
 #define REQ_FLUSH		(1ULL << __REQ_FLUSH)
 #define REQ_POST_FLUSH_BARRIER	(1ULL << __REQ_POST_FLUSH_BARRIER)
 #define REQ_FLUSH_SEQ		(1ULL << __REQ_FLUSH_SEQ)
-#define REQ_BG			(1ULL << __REQ_BG)
-#define REQ_FG			(1ULL << __REQ_FG)
 #define REQ_IO_STAT		(1ULL << __REQ_IO_STAT)
 #define REQ_MIXED_MERGE		(1ULL << __REQ_MIXED_MERGE)
 #define REQ_SECURE		(1ULL << __REQ_SECURE)
 #define REQ_PM			(1ULL << __REQ_PM)
 #define REQ_HASHED		(1ULL << __REQ_HASHED)
 #define REQ_MQ_INFLIGHT		(1ULL << __REQ_MQ_INFLIGHT)
-
-struct blk_rq_stat {
-	s64 mean;
-	u64 min;
-	u64 max;
-	s64 nr_samples;
-	s64 time;
-};
 
 #endif /* __LINUX_BLK_TYPES_H */
