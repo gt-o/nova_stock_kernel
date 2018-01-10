@@ -64,11 +64,6 @@
 #include <asm/psci.h>
 #include <asm/efi.h>
 
-#ifdef CONFIG_DUMP_SYS_INFO
-#include <linux/module.h>
-#include <linux/srecorder.h>
-#endif
-
 unsigned int processor_id;
 EXPORT_SYMBOL(processor_id);
 
@@ -101,14 +96,6 @@ EXPORT_SYMBOL(cold_boot);
 static const char *cpu_name;
 static const char *machine_name;
 phys_addr_t __fdt_pointer __initdata;
-
-#ifdef CONFIG_DUMP_SYS_INFO
-unsigned long get_cpu_name(void)
-{
-    return (unsigned long)&cpu_name;
-}
-EXPORT_SYMBOL(get_cpu_name);
-#endif
 
 /*
  * Standard memory resources
@@ -259,9 +246,9 @@ static void __init setup_processor(void)
 	if (!cwg)
 		pr_warn("No Cache Writeback Granule information, assuming cache line size %d\n",
 			cls);
-	if (L1_CACHE_BYTES < cls)
-		pr_warn("L1_CACHE_BYTES smaller than the Cache Writeback Granule (%d < %d)\n",
-			L1_CACHE_BYTES, cls);
+	if (ARCH_DMA_MINALIGN < cls)
+		pr_warn("ARCH_DMA_MINALIGN smaller than the Cache Writeback Granule (%d < %d)\n",
+			ARCH_DMA_MINALIGN, cls);
 
 	/*
 	 * ID_AA64ISAR0_EL1 contains 4-bit wide signed feature blocks.

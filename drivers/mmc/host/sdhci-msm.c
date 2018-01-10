@@ -2194,7 +2194,7 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
                                   udelay(1300);
                         }
 #else
-                        ret = sdhci_msm_vreg_disable(vreg_table[i])
+                        ret = sdhci_msm_vreg_disable(vreg_table[i]);
 #endif
 			if (ret)
 				goto out;

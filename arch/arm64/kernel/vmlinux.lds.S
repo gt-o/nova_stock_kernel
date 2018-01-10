@@ -95,7 +95,6 @@ SECTIONS
 			TEXT_TEXT
 			SCHED_TEXT
 			LOCK_TEXT
-			KPROBES_TEXT
 			HYPERVISOR_TEXT
 			*(.fixup)
 			*(.gnu.warning)
@@ -135,13 +134,6 @@ SECTIONS
 
 	. = ALIGN(PAGE_SIZE);
 	__init_end = .;
-
-	. = ALIGN(32);
-	__start_hwlog_tag = .;
-	__start_hwlog_tag : {
-		*(__hwlog_tag)
-	}
-	__stop_hwlog_tag = .;
 
 	. = ALIGN(4);
 	.altinstructions : {

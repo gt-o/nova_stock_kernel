@@ -72,7 +72,6 @@ void (*pm_power_off)(void);
 EXPORT_SYMBOL_GPL(pm_power_off);
 
 void (*arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd);
-EXPORT_SYMBOL_GPL(arm_pm_restart);
 
 /*
  * This is our default idle handler.
@@ -222,19 +221,21 @@ static void show_data(unsigned long addr, int nbytes, const char *name)
 
 static void show_extra_register_data(struct pt_regs *regs, int nbytes)
 {
-    mm_segment_t fs;
-    fs = get_fs();
-    set_fs(KERNEL_DS);
-    show_data(regs->pc - nbytes, nbytes * 2, "PC");
-    show_data(regs->regs[30] - nbytes, nbytes * 2, "LR");
-    show_data(regs->sp - nbytes, nbytes * 2, "SP");
-    set_fs(fs);
+	mm_segment_t fs;
+
+	fs = get_fs();
+	set_fs(KERNEL_DS);
+	show_data(regs->pc - nbytes, nbytes * 2, "PC");
+	show_data(regs->regs[30] - nbytes, nbytes * 2, "LR");
+	show_data(regs->sp - nbytes, nbytes * 2, "SP");
+	set_fs(fs);
 }
 
 void __show_regs(struct pt_regs *regs)
 {
 	int i, top_reg;
 	u64 lr, sp;
+
 	if (compat_user_mode(regs)) {
 		lr = regs->compat_lr;
 		sp = regs->compat_sp;
@@ -256,6 +257,8 @@ void __show_regs(struct pt_regs *regs)
 		if (i % 2 == 0)
 			printk("\n");
 	}
+	if (!user_mode(regs))
+		show_extra_register_data(regs, 256);
 	printk("\n");
 }
 

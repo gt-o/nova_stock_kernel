@@ -29,7 +29,6 @@
 #include <asm/debug-monitors.h>
 #include <asm/cputype.h>
 #include <asm/system_misc.h>
-#include <linux/kprobes.h>
 
 /* Determine debug architecture. */
 u8 debug_monitors_arch(void)
@@ -131,21 +130,20 @@ static void clear_os_lock(void *unused)
 	asm volatile("msr oslar_el1, %0" : : "r" (0));
 }
 
-static int __cpuinit os_lock_notify(struct notifier_block *self,
+static int os_lock_notify(struct notifier_block *self,
 				    unsigned long action, void *data)
 {
 	int cpu = (unsigned long)data;
-	action &= ~CPU_TASKS_FROZEN;
-	if (action == CPU_ONLINE || action == CPU_STARTING)
+	if ((action & ~CPU_TASKS_FROZEN) == CPU_ONLINE)
 		smp_call_function_single(cpu, clear_os_lock, NULL, 1);
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata os_lock_nb = {
+static struct notifier_block os_lock_nb = {
 	.notifier_call = os_lock_notify,
 };
 
-static int __cpuinit debug_monitors_init(void)
+static int debug_monitors_init(void)
 {
 	cpu_notifier_register_begin();
 
@@ -230,7 +228,6 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 			       struct pt_regs *regs)
 {
 	siginfo_t info;
-	bool handler_found = false;
 
 	/*
 	 * If we are stepping a pending breakpoint, call the hw_breakpoint
@@ -254,21 +251,15 @@ static int single_step_handler(unsigned long addr, unsigned int esr,
 		 */
 		user_rewind_single_step(current);
 	} else {
-#ifdef	CONFIG_KPROBES
-		if (kprobe_single_step_handler(regs, esr) == DBG_HOOK_HANDLED)
-			handler_found = true;
-#endif
 		if (call_step_hook(regs, esr) == DBG_HOOK_HANDLED)
-			handler_found = true;
+			return 0;
 
-		if (!handler_found) {
-			pr_warning("Unexpected kernel single-step exception at EL1\n");
-			/*
-			 * Re-enable stepping since we know that we will be
-			 * returning to regs.
-			 */
-			set_regs_spsr_ss(regs);
-		}
+		pr_warning("Unexpected kernel single-step exception at EL1\n");
+		/*
+		 * Re-enable stepping since we know that we will be
+		 * returning to regs.
+		 */
+		set_regs_spsr_ss(regs);
 	}
 
 	return 0;
@@ -324,14 +315,7 @@ static int brk_handler(unsigned long addr, unsigned int esr,
 		};
 
 		force_sig_info(SIGTRAP, &info, current);
-	}
-#ifdef	CONFIG_KPROBES
-	else if ((esr & BRK64_ESR_MASK) == BRK64_ESR_KPROBES) {
-		if (kprobe_breakpoint_handler(regs, esr) != DBG_HOOK_HANDLED)
-			return -EFAULT;
-	}
-#endif
-	else if (call_break_hook(regs, esr) != DBG_HOOK_HANDLED) {
+	} else if (call_break_hook(regs, esr) != DBG_HOOK_HANDLED) {
 		pr_warning("Unexpected kernel BRK exception at EL1\n");
 		return -EFAULT;
 	}

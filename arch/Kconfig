@@ -236,8 +236,7 @@ config HAVE_CLK
 	  thus are a key power management tool on many systems.
 
 config HAVE_DMA_API_DEBUG
-	bool "DMA API debug function"
-	default y
+	bool
 
 config HAVE_HW_BREAKPOINT
 	bool
