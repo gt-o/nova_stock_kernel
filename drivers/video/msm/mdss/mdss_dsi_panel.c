@@ -26,9 +26,6 @@
 #include "mdss_dsi.h"
 #include "mdss_dba_utils.h"
 
-#ifdef CONFIG_LCDKIT_DRIVER
-#include "lcdkit_dsi_panel.h"
-#else
 #ifdef CONFIG_LOG_JANK
 #include <huawei_platform/log/log_jank.h>
 #endif
@@ -43,13 +40,11 @@ static bool enable_initcode_debugging = FALSE;
 module_param_named(enable_initcode_debugging, enable_initcode_debugging, bool, S_IRUGO | S_IWUSR);
 static bool global_tp_pre_lcd_flag = false;
 #endif
-#endif
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 48
 #define DEFAULT_MDP_TRANSFER_TIME 14000
 
 #define VSYNC_DELAY msecs_to_jiffies(17)
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 const char *default_panel_name;
 
@@ -59,7 +54,6 @@ const char *default_panel_name;
 #define DSM_REG_BUF 256
 
 
-#endif
 #endif
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
@@ -155,14 +149,12 @@ static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	}
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifndef CONFIG_HUAWEI_KERNEL_LCD
 static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
 static struct dsi_cmd_desc dcs_read_cmd = {
 	{DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(dcs_cmd)},
 	dcs_cmd
 };
-#endif
 #else
 static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
 static struct dsi_cmd_desc dcs_read_cmd = {
@@ -177,7 +169,6 @@ int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	struct dcs_cmd_req cmdreq;
 	struct mdss_panel_info *pinfo;
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	struct dsi_panel_cmds *pcmds;
 	char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
@@ -185,7 +176,6 @@ int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 		{DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(dcs_cmd)},
 		dcs_cmd
 	};
-#endif
 #endif
 
 	pinfo = &(ctrl->panel_data.panel_info);
@@ -206,7 +196,6 @@ int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	/*
 	 * blocked here, until call back called
 	 */
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	if(ctrl->esd_check_enable)
 	{
@@ -214,7 +203,6 @@ int mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 		if (pcmds->link_state == DSI_HS_MODE)
 			cmdreq.flags  |= CMD_REQ_HS_MODE;
 	}
-#endif
 #endif
 
 	return mdss_dsi_cmdlist_put(ctrl, &cmdreq);
@@ -249,7 +237,6 @@ static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
 static struct dsi_cmd_desc backlight_cmd = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, sizeof(led_pwm1)},
@@ -280,7 +267,6 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
-#endif
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -318,23 +304,7 @@ static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 			goto mode_gpio_err;
 		}
 	}
-	#ifdef CONFIG_LCDKIT_DRIVER
-	if (gpio_is_valid(ctrl_pdata->disp_bl_gpio)) {
-		rc = gpio_request(ctrl_pdata->disp_bl_gpio,
-						"bl_enable");
-		if (rc) {
-			pr_err("request bl gpio failed, rc=%d\n",
-				       rc);
-			goto bl_en_gpio_err;
-		}
-	}
-	#endif
 	return rc;
-#ifdef CONFIG_LCDKIT_DRIVER
-bl_en_gpio_err:
-	if (gpio_is_valid(ctrl_pdata->mode_gpio))
-		gpio_free(ctrl_pdata->mode_gpio);
-#endif
 mode_gpio_err:
 	if (gpio_is_valid(ctrl_pdata->bklt_en_gpio))
 		gpio_free(ctrl_pdata->bklt_en_gpio);
@@ -347,7 +317,6 @@ disp_en_gpio_err:
 	return rc;
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
@@ -497,7 +466,6 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 exit:
 	return rc;
 }
-#endif
 /**
  * mdss_dsi_roi_merge() -  merge two roi into single roi
  *
@@ -768,11 +736,9 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	struct mdss_dsi_ctrl_pdata *sctrl = NULL;
 	static u32 pre_bl_level=0;
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	static bool is_first_on = true;
 	static bool lcd_log_flag = true;
-#endif
 #endif
 
 	if (pdata == NULL) {
@@ -799,16 +765,10 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	if ((bl_level < pdata->panel_info.bl_min) && (bl_level != 0))
 		bl_level = pdata->panel_info.bl_min;
 
-    #ifdef CONFIG_LCDKIT_DRIVER
-    lcdkit_record_bl_level(bl_level);
-    lcdkit_delay(lcdkit_info.panel_infos.delay_bf_bl);
-    #endif
-
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 		LCD_LOG_DBG("%s:LCD backlight is: %d \n",__func__,bl_level);
 		if (lcd_log_flag || (bl_level == 0)) {
@@ -836,7 +796,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 				}
 			}
 		}
-#endif
 #endif
 
 		break;
@@ -868,11 +827,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 			}
 		}
 		break;
-	#ifdef CONFIG_LCDKIT_DRIVER
-	case BL_IC_TI:
-		//lcdkit_mdss_dsi_panel_bklt_IC_TI(ctrl_pdata, bl_level);
-		break;
-	#endif
 	default:
 		pr_err("%s: Unknown bl_ctrl configuration\n",
 			__func__);
@@ -880,7 +834,6 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	}
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
@@ -957,7 +910,6 @@ end:
 #endif
 	return ret;
 }
-#endif
 
 static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
 {
@@ -998,7 +950,6 @@ end:
 	return 0;
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
@@ -1314,7 +1265,6 @@ out:
 	mutex_unlock(&ctrl->panel_data.LCD_checksum_lock);
 	return ret;
 }
-#endif
 #endif
 
 static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
@@ -1910,7 +1860,6 @@ static void mdss_panel_parse_te_params(struct device_node *np,
 	te->wr_ptr_irq = 0;
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 static int mdss_dsi_parse_reset_seq(struct device_node *np,
 		u32 rst_seq[MDSS_DSI_RST_SEQ_LEN], u32 *rst_len,
 		const char *name)
@@ -2008,7 +1957,6 @@ static int mdss_dsi_nt35596_read_status(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		return 1;
 	}
 }
-#endif
 
 static void mdss_dsi_parse_roi_alignment(struct device_node *np,
 		struct dsi_panel_timing *pt)
@@ -2107,7 +2055,6 @@ exit:
 	return;
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 /* the length of all the valid values to be checked should not be great
  * than the length of returned data from read command.
  */
@@ -2271,7 +2218,6 @@ error1:
 error:
 	pinfo->esd_check_enabled = false;
 }
-#endif
 
 static int mdss_dsi_parse_panel_features(struct device_node *np,
 	struct mdss_dsi_ctrl_pdata *ctrl)
@@ -2475,7 +2421,6 @@ static void mdss_dsi_parse_dfps_config(struct device_node *pan_node,
 	return;
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 static void mdss_panel_parse_esd_dt(struct device_node *np,
 			struct mdss_dsi_ctrl_pdata *ctrl_pdata)
@@ -2710,7 +2655,6 @@ int mdss_panel_parse_bl_settings(struct device_node *np,
 	}
 	return 0;
 }
-#endif
 
 int mdss_dsi_panel_timing_switch(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct mdss_panel_timing *timing)
@@ -2760,7 +2704,6 @@ void mdss_dsi_unregister_bl_settings(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 		led_trigger_unregister_simple(bl_led_trigger);
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 static int mdss_dsi_panel_timing_from_dt(struct device_node *np,
 		struct dsi_panel_timing *pt,
 		struct mdss_panel_data *panel_data)
@@ -3247,10 +3190,6 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	mdss_panel_parse_esd_dt(np,ctrl_pdata);
 	mdss_panel_parse_dsm_dt(np,ctrl_pdata);
 	mdss_panel_parse_frame_checksum_dt(np,ctrl_pdata);
-	#ifdef CONFIG_LCDKIT_DRIVER
-	rc = of_property_read_u32(np, "hw,lcdkit-bl-en-gpio",&tmp);
-	ctrl_pdata->disp_bl_gpio = (!rc ? tmp : -1);
-	#endif
 #endif
 
 	if (pinfo->is_dba_panel) {
@@ -3337,9 +3276,3 @@ int mdss_dsi_panel_init(struct device_node *node,
 #endif
 	return 0;
 }
-#endif
-
-#ifdef CONFIG_LCDKIT_DRIVER
-#include "lcdkit_dsi_panel.c"
-#endif
-

@@ -15,7 +15,6 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/mdss_io_util.h>
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 #include <linux/regulator/driver.h>
 #include <linux/hw_lcd_common.h>
@@ -44,7 +43,6 @@ struct regulator {
 	struct regulator_dev *rdev;
 	struct dentry *debugfs;
 };
-#endif
 #endif
 
 #define MAX_I2C_CMDS  16
@@ -243,7 +241,6 @@ vreg_get_fail:
 EXPORT_SYMBOL(msm_dss_config_vreg);
 
 /* a requirement about the production line test the leaky current of LCD  */
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 static bool huawei_lcd_is_factory_mode(void)
 {
@@ -305,14 +302,11 @@ static bool is_default_lcd(void)
 	return false;
 }
 #endif
-#endif
 int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 {
 	int i = 0, rc = 0;
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	int is_orise_panel = 0;
-#endif
 #endif
 	bool need_sleep;
 	if (enable) {
@@ -324,7 +318,6 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 					in_vreg[i].vreg_name, rc);
 				goto vreg_set_opt_mode_fail;
 			}
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 			if(!strcmp(in_vreg[i].vreg_name, "lab") )
 			{
@@ -351,7 +344,6 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 				}
 			}
 #endif
-#endif
 			need_sleep = !regulator_is_enabled(in_vreg[i].vreg);
 			if (in_vreg[i].pre_on_sleep && need_sleep)
 				usleep_range(in_vreg[i].pre_on_sleep * 1000,
@@ -377,7 +369,6 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 		}
 	} else {
 		for (i = num_vreg-1; i >= 0; i--) {
-#ifndef CONFIG_LCDKIT_DRIVER
 			if(huawei_lcd_is_factory_mode())
 			{
 				if(enable_PT_test)
@@ -411,7 +402,6 @@ int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 					continue;
 				}
 			}
-#endif
 #endif
 			if (in_vreg[i].pre_off_sleep)
 				usleep_range(in_vreg[i].pre_off_sleep * 1000,

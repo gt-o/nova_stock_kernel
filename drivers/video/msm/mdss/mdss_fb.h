@@ -349,11 +349,9 @@ struct msm_fb_data_type {
 	u32 wait_for_kickoff;
 	u32 thermal_level;
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	u32 frame_updated;
 	struct delayed_work bkl_work;
-#endif
 #endif
 
 	int fb_mmap_type;

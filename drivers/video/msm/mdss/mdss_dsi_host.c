@@ -30,10 +30,8 @@
 #include "mdss_smmu.h"
 #include "mdss_dsi_phy.h"
 
-#ifndef CONFIG_LCDKIT_DRIVER
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 #include <linux/hw_lcd_common.h>
-#else
-#include "lcdkit_dsi_host.h"
 #endif
 
 #define VSYNC_PERIOD 17
@@ -122,10 +120,8 @@ void mdss_dsi_ctrl_init(struct device *ctrl_dev,
 	mutex_init(&ctrl->mutex);
 	mutex_init(&ctrl->cmd_mutex);
 	mutex_init(&ctrl->clk_lane_mutex);
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 	mutex_init(&ctrl->panel_data.LCD_checksum_lock);
-#endif
 #endif
 	mutex_init(&ctrl->cmdlist_mutex);
 	mdss_dsi_buf_alloc(ctrl_dev, &ctrl->tx_buf, SZ_4K);
@@ -1407,7 +1403,6 @@ void mdss_dsi_ctrl_setup(struct mdss_dsi_ctrl_pdata *ctrl)
 	mdss_dsi_op_mode_config(pdata->panel_info.mipi.mode, pdata);
 }
 
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 int hw_mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -1539,7 +1534,6 @@ int mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 
 	return ret;
 }
-#endif
 #endif
 
 int mdss_dsi_cmd_reg_tx(u32 data,
@@ -2100,11 +2094,7 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 			ctrl->mdss_util->iommu_unlock();
 
             #ifdef CONFIG_HUAWEI_DSM
-            #ifndef CONFIG_LCDKIT_DRIVER
             lcd_report_dsm_err(DSM_LCD_MDSS_IOMMU_ERROR_NO,ret,0);
-            #else
-            lcdkit_report_dsm_err(DSM_LCD_MDSS_IOMMU_ERROR_NO,0,ret,0);
-            #endif
             #endif
 
 			return -ENOMEM;
@@ -2164,13 +2154,8 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 		status = reg_val & DSI_INTR_CMD_DMA_DONE;
 		if (status) {
 			reg_val &= DSI_INTR_MASK_ALL;
-            #ifndef CONFIG_LCDKIT_DRIVER
 			/* clear CMD DMA isr only */
 			reg_val |= DSI_INTR_CMD_DMA_DONE;
-            #else
-            /* clear CMD DMA and BTA_DONE isronly */
-            reg_val |= (DSI_INTR_CMD_DMA_DONE | DSI_INTR_BTA_DONE);
-            #endif
 			MIPI_OUTP(ctrl->ctrl_base + 0x0110, reg_val);
 			mdss_dsi_disable_irq_nosync(ctrl, DSI_CMD_TERM);
 			complete(&ctrl->dma_comp);
@@ -2204,11 +2189,7 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 #ifdef CONFIG_HUAWEI_DSM
 	if (ret < 0) {
 		rg_address =  ((tp->len > 4) ? *(tp->data + 4) : *(tp->data));
-		#ifndef CONFIG_LCDKIT_DRIVER
 		lcd_report_dsm_err(DSM_LCD_MIPI_ERROR_NO, ret, rg_address);
-		#else
-		lcdkit_report_dsm_err(DSM_LCD_MIPI_ERROR_NO, 0, ret, rg_address);
-		#endif
 	}
 #endif
 
@@ -2439,11 +2420,7 @@ void mdss_dsi_wait4video_done(struct mdss_dsi_ctrl_pdata *ctrl)
 			msecs_to_jiffies(VSYNC_PERIOD * 4));
 
 	data = MIPI_INP((ctrl->ctrl_base) + 0x0110);
-	#ifndef CONFIG_LCDKIT_DRIVER
     data &= DSI_INTR_TOTAL_MASK;
-    #else
-    data &= (DSI_INTR_TOTAL_MASK | DSI_INTR_VIDEO_DONE);
-    #endif
 	data &= ~DSI_INTR_VIDEO_DONE_MASK;
 	MIPI_OUTP((ctrl->ctrl_base) + 0x0110, data);
 }
@@ -2550,11 +2527,7 @@ void mdss_dsi_cmd_mdp_busy(struct mdss_dsi_ctrl_pdata *ctrl)
 		spin_unlock_irqrestore(&ctrl->mdp_lock, flags);
 		if (!rc) {
 #ifdef CONFIG_HUAWEI_DSM
-			#ifndef CONFIG_LCDKIT_DRIVER
 			lcd_report_dsm_err(DSM_LCD_MDSS_MDP_BUSY_ERROR_NO,0,0);
-			#else
-			lcdkit_report_dsm_err(DSM_LCD_MDSS_MDP_BUSY_ERROR_NO,0,0,0);
-			#endif
 #endif
 			if (mdss_dsi_mdp_busy_tout_check(ctrl)) {
 				pr_err("%s: timeout error\n", __func__);
@@ -3223,11 +3196,6 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 	u32 intr;
 	struct mdss_dsi_ctrl_pdata *ctrl =
 			(struct mdss_dsi_ctrl_pdata *)ptr;
-#ifdef CONFIG_LCDKIT_DRIVER
-#ifdef CONFIG_HUAWEI_DSM
-	u32 dsi_status[5] = {0};
-#endif
-#endif
 
 	if (!ctrl->ctrl_base) {
 		pr_err("%s:%d DSI base adr no Initialized",
@@ -3271,16 +3239,6 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 
 	if (isr & DSI_INTR_ERROR) {
 		MDSS_XLOG(ctrl->ndx, ctrl->mdp_busy, isr, 0x97);
-#ifdef CONFIG_LCDKIT_DRIVER
-#ifdef CONFIG_HUAWEI_DSM
-		dsi_status[0] = MIPI_INP(ctrl->ctrl_base + 0x0068);/* DSI_ACK_ERR_STATUS */
-		dsi_status[1] = MIPI_INP(ctrl->ctrl_base + 0x00c0);/* DSI_TIMEOUT_STATUS */
-		dsi_status[2] = MIPI_INP(ctrl->ctrl_base + 0x00b4);/* DSI_DLN0_PHY_ERR */
-		dsi_status[3] = MIPI_INP(ctrl->ctrl_base + 0x000c);/* DSI_FIFO_STATUS */
-		dsi_status[4] = MIPI_INP(ctrl->ctrl_base + 0x0008);/* DSI_STATUS */
-		lcdkit_record_dsm_err(dsi_status);
-#endif
-#endif
 		mdss_dsi_error(ctrl);
 	}
 
@@ -3330,7 +3288,3 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 
 	return IRQ_HANDLED;
 }
-#ifdef CONFIG_LCDKIT_DRIVER
-#include "lcdkit_dsi_host.c"
-#endif
-

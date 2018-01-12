@@ -39,22 +39,6 @@ int sysctl_tcp_retries2 __read_mostly = TCP_RETR2;
 int sysctl_tcp_orphan_retries __read_mostly;
 int sysctl_tcp_thin_linear_timeouts __read_mostly;
 
-#ifdef CONFIG_HUAWEI_MSS_AUTO_CHANGE
-#define TCP_MSS_REDUCE_SIZE (200)
-#define TCP_MSS_MIN_SIZE    (1200)
-void tcp_reduce_mss(struct inet_connection_sock *icsk, struct sock *sk)
-{
-    struct tcp_sock *tp = NULL;
-    if(icsk && sk) {
-        tp = tcp_sk(sk);
-        if(tp && tp->mss_cache > TCP_MSS_MIN_SIZE && tp->rx_opt.mss_clamp > TCP_MSS_MIN_SIZE) {
-            tp->rx_opt.mss_clamp = tp->mss_cache - TCP_MSS_REDUCE_SIZE;
-            tcp_sync_mss(sk, icsk->icsk_pmtu_cookie);
-        }
-    }
-}
-#endif
-
 /*Function to reset tcp_ack related sysctl on resetting master control */
 void set_tcp_default(void)
 {
@@ -231,9 +215,6 @@ static int tcp_write_timeout(struct sock *sk)
 		if (retransmits_timed_out(sk, sysctl_tcp_retries1, 0, 0)) {
 			/* Black hole detection */
 			tcp_mtu_probing(icsk, sk);
-#ifdef CONFIG_HUAWEI_MSS_AUTO_CHANGE
-            tcp_reduce_mss(icsk, sk);
-#endif
 			dst_negative_advice(sk);
 		}
 

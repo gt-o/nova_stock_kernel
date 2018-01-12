@@ -851,7 +851,7 @@ extern struct adreno_gpudev adreno_a5xx_gpudev;
 extern int adreno_wake_nice;
 extern unsigned int adreno_wake_timeout;
 
-#if defined(CONFIG_HUAWEI_KERNEL_LCD) || defined(CONFIG_LCDKIT_DRIVER)
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 void adreno_force_waking_gpu(void);
 #endif
 long adreno_ioctl(struct kgsl_device_private *dev_priv,

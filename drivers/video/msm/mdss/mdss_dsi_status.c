@@ -30,20 +30,12 @@
 #include "mdss_panel.h"
 #include "mdss_mdp.h"
 
-#ifdef CONFIG_LCDKIT_DRIVER
-#include "lcdkit_dsi_status.h"
-#endif
-
 #define STATUS_CHECK_INTERVAL_MS 5000
 #define STATUS_CHECK_INTERVAL_MIN_MS 50
-#ifdef CONFIG_LCDKIT_DRIVER
-#define DSI_STATUS_CHECK_INIT 0
-#else
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 #define DSI_STATUS_CHECK_INIT 0
 #else
 #define DSI_STATUS_CHECK_INIT -1
-#endif
 #endif
 
 #define DSI_STATUS_CHECK_DISABLE 1
@@ -117,7 +109,6 @@ irqreturn_t hw_vsync_handler(int irq, void *data)
  * sheduled based on mipi timing start
  * cancelled based on mipi timing stop
  */
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifdef CONFIG_HUAWEI_KERNEL_LCD
 void mdss_dsi_status_check_ctl(struct msm_fb_data_type *mfd, int sheduled)
 {
@@ -245,7 +236,6 @@ static int fb_event_callback(struct notifier_block *self,
 	return 0;
 }
 #endif
-#endif
 
 static int param_dsi_status_disable(const char *val, struct kernel_param *kp)
 {
@@ -291,7 +281,6 @@ int __init mdss_dsi_status_init(void)
 		pr_err("%s: can't allocate memory\n", __func__);
 		return -ENOMEM;
 	}
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifndef CONFIG_HUAWEI_KERNEL_LCD
 	pstatus_data->fb_notifier.notifier_call = fb_event_callback;
 
@@ -302,7 +291,6 @@ int __init mdss_dsi_status_init(void)
 		kfree(pstatus_data);
 		return -EPERM;
 	}
-#endif
 #endif
 
 
@@ -317,19 +305,13 @@ int __init mdss_dsi_status_init(void)
 
 void __exit mdss_dsi_status_exit(void)
 {
-#ifndef CONFIG_LCDKIT_DRIVER
 #ifndef CONFIG_HUAWEI_KERNEL_LCD
 	fb_unregister_client(&pstatus_data->fb_notifier);
-#endif
 #endif
 	cancel_delayed_work_sync(&pstatus_data->check_status);
 	kfree(pstatus_data);
 	pr_debug("%s: DSI ctrl status work queue removed\n", __func__);
 }
-
-#ifdef CONFIG_LCDKIT_DRIVER
-#include "lcdkit_dsi_status.c"
-#endif
 
 module_param_call(interval, param_set_interval, param_get_uint,
 						&interval, 0644);

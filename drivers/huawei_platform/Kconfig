@@ -22,7 +22,6 @@ config HUAWEI_TOUCH_SCREEN
 	  To compile this driver as a module, choose M here: the  module will be called input.
 
 source "drivers/huawei_platform/touchscreen/Kconfig"
-source "drivers/huawei_platform/power/Kconfig"
 source "drivers/huawei_platform/antenna_board_match/Kconfig"
 source "drivers/huawei_platform/antenna_cable/Kconfig"
 source "drivers/huawei_platform/log/Kconfig"

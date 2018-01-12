@@ -70,12 +70,6 @@
 			reg = <0x0 0x8b800000 0x0 0x1800000>;
 		};
 
-		srecorder_mem: srecorder_region@0 {
-			compatible = "removed-dma-pool", "srecorder_mem";
-			no-map;
-			reg = <0x0 0x8f100000 0x0 0x400000>;
-		};
-
 		venus_mem: venus_region@0 {
 			compatible = "shared-dma-pool";
 			reusable;
@@ -108,20 +102,6 @@
 
 		cont_splash_mem: splash_region@83000000 {
 			reg = <0x0 0x90000000 0x0 0x1400000>;
-		};
-
-		sahara_mem: sahara_region@0x92000000 {
-			compatible = "sahara_mem";
-			no-map;
-			reg = <0x0 0x92000000 0x0 0x0200000>;
-		};
-		hwlog_tz_mem: hwlog_tz_region@0 {
-			linux,reserve-contiguous-region;
-			linux,reserve-region;
-			linux,remove-completely;
-			no-map;
-			reg = <0x0 0x92200000 0x0 0x0100000>;
-			label = "hwlog_tz_mem";
 		};
 	};
 
@@ -972,22 +952,6 @@
 			compatible = "qcom,msm-imem-pil";
 			reg = <0x94c 200>;
 		};
-
-		srecorder_header@ae0 {
-			compatible = "qcom,msm-imem-srecorder_header";
-			reg = <0xae0 24>;
-		};
-
-		hw_reset_magic_addr@fe4 {
-			compatible = "qcom,msm-imem-reset_magic_addr";
-			reg = <0xfe4 4>;
-		};
-
-		hw_tz_reset_reason_addr@7a4 {
-			compatible = "qcom,msm-imem-tz-reset-reason-addr";
-			reg = <0x7a4 4>;
-		};
-
 	};
 
 	jtag_fuse: jtagfuse@a601c {

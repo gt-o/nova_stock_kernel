@@ -25,10 +25,8 @@
 #include "mdss_panel.h"
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
-#ifdef CONFIG_LCDKIT_DRIVER
-#include <linux/lcdkit_dsm.h>
-#include "lcdkit_dsi_status.h"
-#else
+
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 #include <linux/hw_lcd_common.h>
 #endif
 
@@ -833,9 +831,6 @@ static int mdss_mdp_video_ctx_stop(struct mdss_mdp_ctl *ctl,
 	mutex_lock(&ctl->offlock);
 	if (ctx->timegen_en) {
 	/*cancle the esd delay work*/
-#ifdef CONFIG_LCDKIT_DRIVER
-		mdss_dsi_status_check_ctl(ctl->mfd,false);
-#endif
 
 		rc = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_BLANK, NULL,
 			CTL_INTF_EVENT_FLAG_DEFAULT);
@@ -1114,13 +1109,7 @@ static void mdss_mdp_video_underrun_intr_done(void *arg)
 			ctl->underrun_cnt);
 
 #ifdef CONFIG_HUAWEI_DSM
-#ifdef CONFIG_LCDKIT_DRIVER
-	lcdkit_underrun_dsm_report(ctl->num,ctl->underrun_cnt,cpufreq_get(0),
-		mdss_mdp_get_clk_rate(MDSS_CLK_AXI, false),
-		mdss_mdp_get_clk_rate(MDSS_CLK_AHB, false));
-#else
 	mdp_underrun_dsm_report(ctl->num,ctl->underrun_cnt);
-#endif
 #endif
 
 	if (!test_bit(MDSS_CAPS_3D_MUX_UNDERRUN_RECOVERY_SUPPORTED,
@@ -1497,11 +1486,7 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 	} else {
 		WARN(1, "commit without wait! ctl=%d", ctl->num);
 #ifdef CONFIG_HUAWEI_DSM
-		#ifdef CONFIG_LCDKIT_DRIVER
-		lcdkit_report_dsm_err(DSM_LCD_MDSS_VIDEO_DISPLAY_ERROR_NO,0,ctl->num,0);
-		#else
 		lcd_report_dsm_err(DSM_LCD_MDSS_VIDEO_DISPLAY_ERROR_NO,ctl->num,0);
-		#endif
 #endif
 	}
 
@@ -1562,7 +1547,7 @@ static int mdss_mdp_video_display(struct mdss_mdp_ctl *ctl, void *arg)
 		mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_POST_PANEL_ON, NULL,
 			CTL_INTF_EVENT_FLAG_DEFAULT);
 	/*scheduled the esd delay work*/
-#if defined(CONFIG_HUAWEI_KERNEL_LCD) || defined(CONFIG_LCDKIT_DRIVER)
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 		mdss_dsi_status_check_ctl(ctl->mfd,true);
 #endif
 

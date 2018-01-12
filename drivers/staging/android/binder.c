@@ -43,10 +43,6 @@
 #include "binder.h"
 #include "binder_trace.h"
 
-#ifdef CONFIG_HUAWEI_KSTATE
-#include <linux/hw_kcollect.h>
-#endif
-
 #define SERVICE_NAME_LEN (64)
 #define SERVICE_NAME_OFFSET (64)
 #define ADD_SERVICE_CODE 3
@@ -774,21 +770,6 @@ static struct binder_buffer *binder_alloc_buf(struct binder_proc *proc,
 				proc->pid, data_size, offsets_size);
 		return NULL;
 	}
-
-#ifdef CONFIG_HUAWEI_KSTATE
-	/*
-	* if async and no more async space left.
-	* data bigger 1/3 buffer or buffer free lower 100K
-	*/
-	if (is_async
-		&& (proc->free_async_space
-			< 3*(size + sizeof(struct binder_buffer))
-			|| proc->free_async_space < 100*1024)) {
-		pr_warn("will no more space [freed:%zd][alloc size:%zd], pid [%d]\n",
-			proc->free_async_space, size, proc->pid);
-		hwbinderinfo(-1, proc->pid);
-	}
-#endif
 
 	if (is_async &&
 	    proc->free_async_space < size + sizeof(struct binder_buffer)) {
@@ -1527,19 +1508,6 @@ static void binder_transaction(struct binder_proc *proc,
 			return_error = BR_DEAD_REPLY;
 			goto err_dead_binder;
 		}
-#ifdef CONFIG_HUAWEI_KSTATE
-		/*
-		* 1.not oneway, sync call
-		* 2.called uid > 2000(SYSTEM_UID,
-		*   PHONE_UID,WIFI_UID,MEDIA_UID,DRM_UID...)
-		* 3.pid not same
-		*/
-		if ((!(tr->flags & TF_ONE_WAY))
-			&& (target_proc->tsk->cred->euid.val > 2000)
-			&& (proc->pid != target_proc->pid)) {
-			hwbinderinfo(proc->pid, target_proc->pid);
-		}
-#endif
 		if (security_binder_transaction(proc->tsk,
 						target_proc->tsk) < 0) {
 			return_error = BR_FAILED_REPLY;

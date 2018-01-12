@@ -49,12 +49,6 @@
 			reg = <0x0 0x8c200000 0x0 0x1800000>;
 		};
 
-		srecorder_mem: srecorder_region@0 {
-			compatible = "removed-dma-pool", "srecorder_mem";
-			no-map;
-			reg = <0x0 0x8f100000 0x0 0x400000>;
-		};
-
 		venus_mem: venus_region@0 {
 			compatible = "shared-dma-pool";
 			reusable;
@@ -93,36 +87,12 @@
 			label = "cont_splash_mem";
 		};
 
-		sahara_mem: sahara_region@0x92000000 {
-			compatible = "sahara_mem";
-			no-map;
-			reg = <0x0 0x92000000 0x0 0x0200000>;
-                };
-
 		gpu_mem: gpu_region@0 {
 			compatible = "shared-dma-pool";
 			reusable;
 			alloc-ranges = <0x0 0x80000000 0x0 0x10000000>;
 			alignment = <0 0x400000>;
 			size = <0 0x800000>;
-		};
-
-		hwlog_tz_mem: hwlog_tz_region@0 {
-			linux,reserve-contiguous-region;
-			linux,reserve-region;
-			linux,remove-completely;
-			no-map;
-			reg = <0x0 0x92200000 0x0 0x0100000>;
-			label = "hwlog_tz_mem";
-		};
-
-		hwboot_fail_mem: hwboot_fail_region@0 {
-			linux,reserve-contiguous-region;
-			linux,reserve-region;
-			linux,remove-completely;
-			no-map;
-			reg = <0x0 0x86800000 0x0 0x0100000>;
-			label = "hwboot_fail_mem";
 		};
 	};
 
@@ -1245,25 +1215,6 @@
 			compatible = "qcom,msm-imem-pil";
 			reg = <0x94c 200>;
 
-		};
-		hw_reset_magic_addr@fe4 {
-			compatible = "qcom,msm-imem-reset_magic_addr";
-			reg = <0xfe4 4>;
-		};
-
-		srecorder_header@ae0 {
-			compatible = "qcom,msm-imem-srecorder_header";
-			reg = <0xae0 24>;
-		};
-
-		hwboot_header@b1c {
-			compatible = "qcom,msm-imem-hwboot_header";
-			reg = <0xb1c 256>;
-		};
-
-		hw_tz_reset_reason_addr@7a4 {
-			compatible = "qcom,msm-imem-tz-reset-reason-addr";
-			reg = <0x7a4 4>;
 		};
 	};
 

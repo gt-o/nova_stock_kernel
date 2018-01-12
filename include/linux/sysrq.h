@@ -17,14 +17,6 @@
 #include <linux/errno.h>
 #include <linux/types.h>
 
-#ifdef CONFIG_HANDSET_SYSRQ_RESET
-
-/* Enable/disable SYSRQ support by default (0==no, 1==yes). */
-
-#define SYSRQ_DEFAULT_ENABLE    0
-
-#endif
-
 /* Possible values of bitmask for enabling sysrq functions */
 /* 0x0001 is reserved for enable everything */
 #define SYSRQ_ENABLE_LOG	0x0002

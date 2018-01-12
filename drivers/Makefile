@@ -18,7 +18,6 @@ obj-$(CONFIG_PCI)		+= pci/
 obj-$(CONFIG_PARISC)		+= parisc/
 obj-$(CONFIG_RAPIDIO)		+= rapidio/
 obj-y				+= video/
-obj-$(CONFIG_LCDKIT_DRIVER)     += devkit/lcdkit/
 obj-y				+= idle/
 
 # IPMI must come before ACPI in order to provide IPMI opregion support
@@ -182,9 +181,7 @@ obj-$(CONFIG_HW_GADGET)     += hwusb/
 
 obj-$(CONFIG_HUAWEI_FACTORY_INFO)	+= hw_fac_info/
 
-obj-$(CONFIG_SRECORDER)     += srecorder/
 obj-$(CONFIG_KRETPROBES) += rphone/
-obj-$(CONFIG_HUAWEI_TS_KIT) += devkit/tpkit/
 obj-$(CONFIG_CPU_STRESS_TEST) += cpu_stress/
 # DTS_EAGLE START
 obj-$(CONFIG_DTS_EAGLE)     += dts_eagle/

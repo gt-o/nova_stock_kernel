@@ -21,10 +21,8 @@
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
 #include "mdss_dsi_clk.h"
-#ifdef CONFIG_LCDKIT_DRIVER
-#include <linux/lcdkit_dsm.h>
-#include "lcdkit_dsi_status.h"
-#else
+
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 #include <linux/hw_lcd_common.h>
 #endif
 
@@ -1941,11 +1939,7 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 			mdss_fb_report_panel_dead(ctl->mfd);
 #ifdef CONFIG_HUAWEI_DSM
 			/* report pingpong dsm error */
-			#ifdef CONFIG_LCDKIT_DRIVER
-			lcdkit_report_dsm_err(DSM_LCD_MDSS_PINGPONG_ERROR_NO,0,rc,0);
-			#else
 			lcd_report_dsm_err(DSM_LCD_MDSS_PINGPONG_ERROR_NO,rc,0);
-			#endif
 #endif
 		}
 		ctx->pp_timeout_report_cnt++;
@@ -2102,7 +2096,7 @@ static int mdss_mdp_cmd_panel_on(struct mdss_mdp_ctl *ctl,
 				ctl->intf_num, rc);
 
 	/*schedule the esd delay work*/
-#if defined(CONFIG_HUAWEI_KERNEL_LCD) || defined(CONFIG_LCDKIT_DRIVER)
+#ifdef CONFIG_HUAWEI_KERNEL_LCD
 			mdss_dsi_status_check_ctl(ctl->mfd,true);
 #endif
 
@@ -2904,9 +2898,6 @@ static int mdss_mdp_cmd_intfs_stop(struct mdss_mdp_ctl *ctl, int session,
 	}
 
 	/*cancel the esd delay work*/
-#ifdef CONFIG_LCDKIT_DRIVER
-	mdss_dsi_status_check_ctl(ctl->mfd,false);
-#endif
 
 	mdss_mdp_cmd_ctx_stop(ctl, ctx, panel_power_state);
 
